@@ -2,7 +2,9 @@ package com.example.morgoth.got_list_view;
 
 import android.app.ActionBar;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.net.ConnectivityManager;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -12,7 +14,9 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ListView;
+import android.widget.Toast;
 import android.widget.Toolbar;
 
 import org.apache.http.HttpResponse;
@@ -25,6 +29,7 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -33,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
     String[][] details;
 
     ListView mListView;
+    Button playButton;
     Toolbar toolbar;
 
     @Override
@@ -42,8 +48,18 @@ public class MainActivity extends AppCompatActivity {
 
         mListView = (ListView) findViewById(R.id.list);
 
-        FetchTitlesAsync task = new FetchTitlesAsync(this);
-        task.execute(new String[] { "http://www.omdbapi.com/?t=Game%20of%20Thrones&Season=1" });
+        playButton = (Button) findViewById(R.id.retry);
+        playButton.setVisibility(View.INVISIBLE);
+        playButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(loadInitialList() == true){
+                    playButton.setVisibility(View.INVISIBLE);
+                }
+            }
+        });
+
+        loadInitialList();
 
         mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
@@ -54,8 +70,17 @@ public class MainActivity extends AppCompatActivity {
 
                 // Only do the async call if the data wasn't already fetched.
                 if(details[position][0] == null) {
-                    DetailsAsyncTask task = new DetailsAsyncTask(position, itemValue);
-                    task.execute(new String[]{"http://www.omdbapi.com/?i=" + ids[position] + "&plot=short&r=json"});
+                    if(isNetworkAvailable(parent.getContext()) == true) {
+                        DetailsAsyncTask task = new DetailsAsyncTask(position, itemValue);
+                        task.execute(new String[]{"http://www.omdbapi.com/?i=" + ids[position] + "&plot=short&r=json"});
+                    }else{
+                        Context context = getApplicationContext();
+                        CharSequence text = "No internet connection available";
+                        int duration = Toast.LENGTH_SHORT;
+
+                        Toast toast = Toast.makeText(context, text, duration);
+                        toast.show();
+                    }
                 }
                 else{
                     // start the episode details activity
@@ -71,6 +96,25 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    public boolean loadInitialList(){
+        if(isNetworkAvailable(this)) {
+            FetchTitlesAsync task = new FetchTitlesAsync(this);
+            task.execute(new String[]{"http://www.omdbapi.com/?t=Game%20of%20Thrones&Season=1"});
+            return true;
+        }
+        else{
+
+            playButton.setVisibility(View.VISIBLE);
+            Context context = getApplicationContext();
+            CharSequence text = "No internet connection available";
+            int duration = Toast.LENGTH_SHORT;
+
+            Toast toast = Toast.makeText(context, text, duration);
+            toast.show();
+            return false;
+        }
+    }
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -83,13 +127,15 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
 
-        if (id == R.id.action_settings) {
-            return true;
-        }
+        return id == R.id.action_settings || super.onOptionsItemSelected(item);
 
-        return super.onOptionsItemSelected(item);
     }
 
+
+    public boolean isNetworkAvailable(final Context context) {
+        final ConnectivityManager connectivityManager = ((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
+        return connectivityManager.getActiveNetworkInfo() != null && connectivityManager.getActiveNetworkInfo().isConnected();
+    }
 
     private class FetchTitlesAsync extends AsyncTask<String, Void, String> {
 
@@ -138,16 +184,16 @@ public class MainActivity extends AppCompatActivity {
 
             JSONArray episodeObject = null;
             try {
-                episodeObject = mainObject.getJSONArray("Episodes");
+                episodeObject = mainObject != null ? mainObject.getJSONArray("Episodes") : null;
             } catch (JSONException e) {
                 e.printStackTrace();
             }
 
             // the array of arrays to hold all details for the episodes
-            details = new String[episodeObject.length()][6];
-            episodes = new String[episodeObject.length()];
-            ids = new String[episodeObject.length()];
-            for(int i = 0; i < episodeObject.length(); i++){
+            details = new String[episodeObject != null ? episodeObject.length() : 0][6];
+            episodes = new String[episodeObject != null ? episodeObject.length() : 0];
+            ids = new String[episodeObject != null ? episodeObject.length() : 0];
+            for(int i = 0; i < (episodeObject != null ? episodeObject.length() : 0); i++){
                 try {
                     episodes[i] = episodeObject.getJSONObject(i).getString("Title");
                     ids[i] = episodeObject.getJSONObject(i).getString("imdbID");
@@ -213,12 +259,12 @@ public class MainActivity extends AppCompatActivity {
             }
 
             try {
-                details[id][0] = mainObject.getString("Year");
-                details[id][1] = mainObject.getString("Rated");
-                details[id][2] = mainObject.getString("Released");
-                details[id][3] = mainObject.getString("Season");
-                details[id][4] = mainObject.getString("Episode");
-                details[id][5] = mainObject.getString("Runtime");
+                details[id][0] = mainObject != null ? mainObject.getString("Year") : null;
+                details[id][1] = mainObject != null ? mainObject.getString("Rated") : null;
+                details[id][2] = mainObject != null ? mainObject.getString("Released") : null;
+                details[id][3] = mainObject != null ? mainObject.getString("Season") : null;
+                details[id][4] = mainObject != null ? mainObject.getString("Episode") : null;
+                details[id][5] = mainObject != null ? mainObject.getString("Runtime") : null;
 
             } catch (JSONException e) {
                 e.printStackTrace();
